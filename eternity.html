@@ -123,6 +123,26 @@ body.scrolled .nav::before{opacity:1}
 .js .rv{opacity:0;transform:translateY(22px);transition:opacity 1s var(--ease) var(--d,0s),transform 1s var(--ease) var(--d,0s)}
 .js .rv.in{opacity:1;transform:none}
 
+/* ============ phone tour ============ */
+.tour-phones{position:absolute;left:50%;top:var(--py,55%);width:0;height:0}
+.ph{position:absolute;left:0;top:0;width:var(--pw,340px);height:var(--phh,670px);margin:calc(var(--phh,670px)/-2) 0 0 calc(var(--pw,340px)/-2);padding:calc(var(--pw,340px)*.035);border-radius:calc(var(--pw,340px)*.16);background:#15171D;box-shadow:0 0 0 1.5px rgba(0,0,0,.5),inset 0 0 0 2px #2A2D36,0 60px 90px -50px rgba(10,16,32,.75);will-change:transform,opacity}
+.ph img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 0;border-radius:calc(var(--pw,340px)*.13)}
+.ph::after{content:'';position:absolute;left:50%;top:calc(var(--pw,340px)*.06);width:30%;height:calc(var(--pw,340px)*.08);transform:translateX(-50%);background:#000;border-radius:999px}
+.tour-ink{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:15}
+.tour-ink path{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1}
+.tour-ink .na{transition:stroke-dashoffset .7s var(--ease)}
+.tour-ink .nb{transition:stroke-dashoffset .9s var(--ease) .12s}
+.tour-ink g.on path{stroke-dashoffset:0}
+.tour-note{position:absolute;z-index:16;width:200px;clip-path:inset(-20% 100% -20% 0);transition:clip-path .7s var(--ease) .2s}
+.tour-note.l{text-align:right;clip-path:inset(-20% 0 -20% 100%)}
+.tour-note.on{clip-path:inset(-20% -5% -20% -5%)}
+.tour-cap{display:none}
+.tour-step{display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:6px 12px;border-radius:999px}
+@media (max-width:760px){
+  .tour-note,.tour-ink .na{display:none}
+  .tour-cap{display:block;position:absolute;left:18px;right:18px;bottom:46px;text-align:center;min-height:1.2em}
+}
+
 /* ============ next work + footer ============ */
 .next{position:relative;display:block;padding:clamp(70px,13vh,130px) var(--pad);border-top:1px solid rgba(18,18,18,.1);background:var(--day);color:var(--ink);isolation:isolate;overflow:hidden;transition:color .5s var(--ease)}
 .next::before{content:'';position:absolute;inset:0;background:var(--tint);transform:scaleY(0);transform-origin:bottom;transition:transform .8s var(--ease);z-index:-1}
@@ -540,6 +560,64 @@ function staticMark(svg, data, o) {
 function scatter(m, seed, minD, maxD, rotMax) {
   const r = rng(seed);
   m.stones.forEach(st => { const a = r() * Math.PI * 2, d = minD + r() * (maxD - minD); st.ox = Math.cos(a) * d; st.oy = Math.sin(a) * d * .75; st.or = (r() - .5) * rotMax; });
+}
+
+/* ---------- phone tour: real screens rotate through the middle, notes outline the exact feature ---------- */
+function outlinePath(x0, y0, x1, y1, seed, rough) {
+  const r = rng(seed), j = () => rough ? (r() - .5) * 3.2 : 0, rad = Math.min(16, (x1 - x0) / 4, (y1 - y0) / 3);
+  const P = [[x0 + rad + j(), y0 + j()], [x1 - rad + j(), y0 + j()], [x1 + j(), y0 + rad + j()], [x1 + j(), y1 - rad + j()], [x1 - rad + j(), y1 + j()], [x0 + rad + j(), y1 + j()], [x0 + j(), y1 - rad + j()], [x0 + j(), y0 + rad + j()]];
+  const q = (cx, cy, p) => `Q${fx(cx)} ${fx(cy)} ${fx(p[0])} ${fx(p[1])}`;
+  let d = `M${fx(P[0][0] + (rough ? 18 : 0))} ${fx(P[0][1])} L${fx(P[1][0])} ${fx(P[1][1])} ${q(x1, y0, P[2])} L${fx(P[3][0])} ${fx(P[3][1])} ${q(x1, y1, P[4])} L${fx(P[5][0])} ${fx(P[5][1])} ${q(x0, y1, P[6])} L${fx(P[7][0])} ${fx(P[7][1])} ${q(x0, y0, P[0])}`;
+  return rough ? d + ` L${fx(P[0][0] + 36)} ${fx(P[0][1] - 2.5)}` : d + 'Z';
+}
+function phoneTour(o) {
+  const stage = o.stage, phones = $$('.ph', stage), ink = $('.tour-ink', stage), cap = $('.tour-cap', stage), N = o.steps.length;
+  const notes = o.notes.map((step, k) => step.map((nt, j) => {
+    const g = svgEl('g', {}, ink), box = svgEl('path', { pathLength: 1, class: 'nb' }, g), arrow = svgEl('path', { pathLength: 1, class: 'na' }, g);
+    if (nt.ink) { box.style.stroke = nt.ink; arrow.style.stroke = nt.ink; }
+    const el = document.createElement('div'); el.className = 'tour-note ' + o.noteClass + ' ' + nt.s; el.textContent = nt.t; stage.appendChild(el);
+    return Object.assign({ g, box, arrow, el, seed: 31 + k * 7 + j }, nt);
+  }));
+  const G = { mob: false, spread: 500 };
+  onMeasure.push(() => {
+    const mob = S.vw < 760, sw = stage.clientWidth, sh = stage.clientHeight;
+    const phh = mob ? Math.min(sh * .56, 520) : Math.min(sh * .76, 720), pw = phh * .507, pad = pw * .035, py = mob ? (o.mobPy || .57) : (o.py || .55);
+    stage.style.setProperty('--phh', fx(phh) + 'px'); stage.style.setProperty('--pw', fx(pw) + 'px'); stage.style.setProperty('--py', py * 100 + '%');
+    const cx = sw / 2, cy = sh * py, L = cx - pw / 2 + pad, T = cy - phh / 2 + pad, W = pw - pad * 2, Hh = phh - pad * 2;
+    G.mob = mob; G.spread = mob ? sw * .8 : Math.min(sw * .4, 640);
+    const a = o.img.w / o.img.h;
+    const map = (x, y) => { const u = x / o.img.w, v = (y - o.img.top) / o.img.h; if (W / Hh > a) return [L + u * W, T + v * (W / a)]; const iw = Hh * a; return [L + (W - iw) / 2 + u * iw, T + v * Hh]; };
+    notes.flat().forEach(nt => {
+      let [x0, y0] = map(nt.b[0], nt.b[1]), [x1, y1] = map(nt.b[2], nt.b[3]);
+      x0 = Math.max(x0, L) - 4; x1 = Math.min(x1, L + W) + 4; y0 = Math.max(y0, T) - 4; y1 = Math.min(y1, T + Hh) + 4;
+      nt.box.setAttribute('d', outlinePath(x0, y0, x1, y1, nt.seed, o.rough));
+      const left = nt.s === 'l', ty = (y0 + y1) / 2, ex = left ? cx - pw / 2 - 26 : cx + pw / 2 + 26, ax = left ? x0 - 5 : x1 + 5;
+      const bend = o.rough ? 18 : 0;
+      nt.arrow.setAttribute('d', `M${fx(ex)} ${fx(ty)} C${fx(ex + (left ? 26 : -26))} ${fx(ty - bend)} ${fx(ax + (left ? -26 : 26))} ${fx(ty - bend)} ${fx(ax)} ${fx(ty)}`);
+      nt.el.style.top = fx(ty - 12) + 'px';
+      if (left) { nt.el.style.left = 'auto'; nt.el.style.right = fx(sw - ex + 10) + 'px'; } else { nt.el.style.right = 'auto'; nt.el.style.left = fx(ex + 10) + 'px'; }
+    });
+  });
+  let curStep = -1, curCap = null;
+  R[o.scene] = p => {
+    let c = 0; for (let k = 1; k < N; k++) c += eio(seg(p, k / N - .022, k / N + .022));
+    const rise = eo(seg(p, 0, .05));
+    phones.forEach((ph, i) => {
+      const d = i - c, ad = Math.min(1, Math.abs(d)), far = Math.abs(d) > 1.35 ? 0 : 1;
+      setStyle(ph, 'transform', `translate3d(${fx(d * G.spread)}px,${fx((1 - rise) * 70 + ad * 9)}vh,0) rotate(${fx(d * 7)}deg) scale(${fx(1 - ad * .32)})`);
+      setStyle(ph, 'opacity', String(fx(far * (1 - ad * (G.mob ? .85 : .62)) * Math.min(1, rise * 1.5))));
+      setStyle(ph, 'zIndex', String(10 - Math.round(Math.abs(d) * 3)));
+    });
+    const step = Math.round(c);
+    if (step !== curStep) { curStep = step; o.nEl.textContent = (step + 1) + ' of ' + N; o.nameEl.textContent = o.steps[step]; roll(o.nameEl); }
+    let txt = '';
+    notes.forEach((sn, k) => sn.forEach((nt, j) => {
+      const a = k / N + (k ? .026 : .05) + (j + 1) * Math.min(.018, .45 / N / sn.length), b = (k + 1) / N - .023;
+      const on = p > a && (k === N - 1 || p < b) && Math.abs(c - k) < .05;
+      tog(nt.g, on); tog(nt.el, on); if (on) txt = nt.t;
+    }));
+    if (cap && curCap !== txt) { cap.textContent = txt; curCap = txt; }
+  };
 }
 
 /* ---------- engine ---------- */
